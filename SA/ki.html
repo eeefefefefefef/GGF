@@ -174,6 +174,23 @@
   #colorMenu .colorOption:hover {
     transform: scale(1.1);
   }
+
+  /* إضافة تحسين الجوال هنا */
+  @media (max-width: 600px) {
+    #bestPlayers {
+      top: auto;
+      bottom: 10px;
+      right: 10px;
+      max-width: 150px;
+      font-size: 0.8rem;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: rgba(255 255 255 / 0.15);
+    }
+    #bestPlayers h3 {
+      font-size: 1rem;
+    }
+  }
 </style>
 </head>
 <body>
@@ -371,71 +388,119 @@
     }
   }
 
-  function clear() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  }
-
-  function draw() {
-    clear();
-    drawPaddle();
-    drawBall();
-  }
-
-  function update() {
-    if (isGameOver) return;
-    movePaddle();
-    moveBall();
-    draw();
-    animationFrameId = requestAnimationFrame(update);
-  }
-
-  function mouseMoveHandler(e) {
-    const rect = canvas.getBoundingClientRect();
-    paddle.x = e.clientX - rect.left - paddle.width / 2;
-  }
-
-  function touchMoveHandler(e) {
-    const touch = e.touches[0];
-    const rect = canvas.getBoundingClientRect();
-    paddle.x = touch.clientX - rect.left - paddle.width / 2;
-  }
-
-  function resetGame() {
-    isGameOver = false;
-    score = 0;
-    scoreDisplay.textContent = `Score: ${score}`;
-    ball.x = canvas.width / 2;
-    ball.y = canvas.height / 3;
-    ball.speedX = 6;
-    ball.speedY = 6;
-    paddle.x = canvas.width / 2 - paddle.width / 2;
-    gameOverOverlay.classList.remove('show');
-    update();
-  }
-
   function endGame() {
     isGameOver = true;
     cancelAnimationFrame(animationFrameId);
+    scoreDisplay.style.display = 'none';
     gameOverOverlay.classList.add('show');
 
-    // حفظ اللاعب في أفضل اللاعبين إذا حقق نتيجة عالية
+    // حفظ النتيجة الحالية في قائمة أفضل اللاعبين
     if(currentPlayerName.trim() !== '') {
-      let players = getBestPlayers();
-      players.push({name: currentPlayerName.trim(), score: score});
-      players.sort((a,b) => b.score - a.score);
-      // خزن فقط أفضل 10 لاعبين لتوفير مساحة
-      players = players.slice(0, 10);
+      const players = getBestPlayers();
+      players.push({ name: currentPlayerName, score });
       saveBestPlayers(players);
       updateBestPlayersList();
     }
   }
 
-  // زر إعادة اللعب
-  retryBtn.addEventListener('click', () => {
-    resetGame();
+  function gameLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawPaddle();
+    drawBall();
+    movePaddle();
+    moveBall();
+
+    if (!isGameOver) {
+      animationFrameId = requestAnimationFrame(gameLoop);
+    }
+  }
+
+  // تحكم بعصا اللعب (paddle) عن طريق اللمس على الجوال
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    let touchX = touch.clientX;
+    paddle.x = touchX - paddle.width / 2;
+    if (paddle.x < 0) paddle.x = 0;
+    if (paddle.x + paddle.width > canvas.width) paddle.x = canvas.width - paddle.width;
+  }, { passive: false });
+
+  // تحكم بالعصا بالكيبورد (يسار ويمين)
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight') {
+      paddle.dx = paddle.speed;
+    } else if (e.key === 'ArrowLeft') {
+      paddle.dx = -paddle.speed;
+    }
   });
 
-  // زر العودة للقائمة الرئيسية - يظهر شاشة البداية وقائمة أفضل اللاعبين ويخفي النتيجة
+  document.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      paddle.dx = 0;
+    }
+  });
+
+  // زر بداية اللعبة
+  startBtn.addEventListener('click', () => {
+    const playerName = playerNameInput.value.trim();
+    if(playerName === '') {
+      errorMsg.style.visibility = 'visible';
+      return;
+    }
+    errorMsg.style.visibility = 'hidden';
+
+    currentPlayerName = playerName;
+    localStorage.setItem('currentPlayerName', playerName);
+
+    startScreen.style.display = 'none';
+    bestPlayersContainer.style.display = 'none';
+    scoreDisplay.style.display = 'block';
+
+    score = 0;
+    isGameOver = false;
+
+    ball.x = canvas.width / 2;
+    ball.y = canvas.height / 3;
+    ball.speedX = 6;
+    ball.speedY = 6;
+
+    paddle.x = canvas.width / 2 - paddle.width / 2;
+
+    gameLoop();
+  });
+
+  // زر إظهار قائمة ألوان الكرة
+  colorBtn.addEventListener('click', () => {
+    colorMenu.style.display = colorMenu.style.display === 'grid' ? 'none' : 'grid';
+  });
+
+  // اختيار لون الكرة
+  colorOptions.forEach(button => {
+    button.addEventListener('click', () => {
+      ballColor = button.getAttribute('data-color');
+      localStorage.setItem('ballColor', ballColor);
+      colorMenu.style.display = 'none';
+    });
+  });
+
+  // زر إعادة اللعب
+  retryBtn.addEventListener('click', () => {
+    gameOverOverlay.classList.remove('show');
+    score = 0;
+    isGameOver = false;
+
+    ball.x = canvas.width / 2;
+    ball.y = canvas.height / 3;
+    ball.speedX = 6;
+    ball.speedY = 6;
+
+    paddle.x = canvas.width / 2 - paddle.width / 2;
+
+    scoreDisplay.style.display = 'block';
+    gameLoop();
+  });
+
+  // زر العودة إلى القائمة الرئيسية
   backToMenuBtn.addEventListener('click', () => {
     gameOverOverlay.classList.remove('show');
     startScreen.style.display = 'flex';
@@ -443,54 +508,12 @@
     scoreDisplay.style.display = 'none';
   });
 
-  // بدء اللعبة بعد التحقق من اسم اللاعب، يخفي شاشة البداية وقائمة أفضل اللاعبين ويظهر النتيجة
-  startBtn.addEventListener('click', () => {
-    const name = playerNameInput.value.trim();
-    if(name === '') {
-      errorMsg.style.visibility = 'visible';
-      return;
-    }
-    errorMsg.style.visibility = 'hidden';
-    currentPlayerName = name;
-    localStorage.setItem('currentPlayerName', name);
-    localStorage.setItem('ballColor', ballColor);
-    startScreen.style.display = 'none';
-    bestPlayersContainer.style.display = 'none';
-    scoreDisplay.style.display = 'block';
-
-    resetGame();
-
-    // أضف مستمعي حركة الماوس واللمس عند بدء اللعبة فقط
-    canvas.addEventListener('mousemove', mouseMoveHandler);
-    canvas.addEventListener('touchmove', touchMoveHandler, { passive: false });
-  });
-
-  // زر تغيير اللون يظهر أو يخفي قائمة الألوان
-  colorBtn.addEventListener('click', () => {
-    if(colorMenu.style.display === 'none') {
-      colorMenu.style.display = 'grid';
-    } else {
-      colorMenu.style.display = 'none';
-    }
-  });
-
-  // اختيار لون جديد للكرة
-  colorOptions.forEach(button => {
-    button.addEventListener('click', () => {
-      ballColor = button.dataset.color;
-      localStorage.setItem('ballColor', ballColor);
-      colorMenu.style.display = 'none';
-    });
-  });
-
-  // تحديث حجم الكانفاس عند تغيير حجم الشاشة
+  // إعادة ضبط حجم الكانفس عند تغيير حجم النافذة
   window.addEventListener('resize', () => {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    paddle.y = canvas.height - 40;
+    paddle.x = canvas.width / 2 - paddle.width / 2;
   });
-
 </script>
-
 </body>
 </html>
