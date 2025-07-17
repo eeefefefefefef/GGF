@@ -28,6 +28,7 @@
     color: white;
     font-weight: bold;
     text-shadow: 0 0 10px white;
+    z-index: 1000;
   }
   #bestPlayers {
     position: fixed;
@@ -40,6 +41,7 @@
     max-width: 250px;
     line-height: 1.4;
     user-select: text;
+    z-index: 1000; /* عالي عشان تكون فوق كل شيء */
   }
   #bestPlayers h3 {
     margin: 0 0 8px 0;
@@ -60,6 +62,7 @@
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.5s ease;
+    z-index: 2000;
   }
   #gameOverOverlay.show {
     opacity: 1;
@@ -175,7 +178,7 @@
     transform: scale(1.1);
   }
 
-  /* إضافة تحسين الجوال هنا */
+  /* تحسين الجوال */
   @media (max-width: 600px) {
     #bestPlayers {
       top: auto;
@@ -218,13 +221,15 @@
       <button class="colorOption" data-color="#FFD700" style="background: #FFD700; color: black;">ذهبي</button>
     </div>
   </div>
-  <div id="bestPlayers">
-    <h3>أفضل 5 لاعبين</h3>
-    <ol id="bestPlayersList" style="padding-inline-start: 18px; margin:0;"></ol>
-  </div>
 </div>
 
-<div id="score">Score: 0</div>
+<!-- قائمة أفضل 5 لاعبين خارج شاشة البداية -->
+<div id="bestPlayers" style="display: none;">
+  <h3>أفضل 5 لاعبين</h3>
+  <ol id="bestPlayersList" style="padding-inline-start: 18px; margin:0;"></ol>
+</div>
+
+<div id="score" style="display: none;">Score: 0</div>
 
 <canvas id="gameCanvas"></canvas>
 
@@ -293,52 +298,30 @@
     localStorage.setItem('bestPlayers', JSON.stringify(players));
   }
 
-  // تحديث قائمة أفضل اللاعبين في الشاشة
+  // تحديث قائمة أفضل اللاعبين بالترتيب والتنسيق
   function updateBestPlayersList() {
     const players = getBestPlayers();
-    players.sort((a,b) => b.score - a.score);
-    const top5 = players.slice(0,5);
-
     bestPlayersList.innerHTML = '';
-    if(top5.length === 0){
-      bestPlayersList.innerHTML = '<li>لا يوجد لاعبين بعد</li>';
-      return;
-    }
-
-    top5.forEach(player => {
+    players.slice(0, 5).forEach(({name, score}) => {
       const li = document.createElement('li');
-      li.textContent = `${player.name} — ${player.score} نقطة`;
+      li.textContent = `${name} - ${score}`;
       bestPlayersList.appendChild(li);
     });
   }
 
-  // عند تحميل الصفحة، نعبي خانة الاسم، لون الكرة، ونخفي قائمة الألوان
-  window.addEventListener('load', () => {
-    colorMenu.style.display = 'none';  // إخفاء قائمة الألوان أول ما تحمل الصفحة
-
-    const savedName = localStorage.getItem('currentPlayerName');
-    if(savedName) {
-      playerNameInput.value = savedName;
-      currentPlayerName = savedName;
-    }
-
-    const savedColor = localStorage.getItem('ballColor');
-    if(savedColor) {
-      ballColor = savedColor;
-    }
-
+  // إضافة لاعب جديد لقائمة أفضل اللاعبين
+  function addPlayerScore(name, score) {
+    if (!name || score == null) return;
+    const players = getBestPlayers();
+    players.push({ name, score });
+    players.sort((a, b) => b.score - a.score);
+    saveBestPlayers(players);
     updateBestPlayersList();
+  }
 
-    // نعرض شاشة البداية مع قائمة أفضل اللاعبين
-    startScreen.style.display = 'flex';
-    bestPlayersContainer.style.display = 'block';
-    scoreDisplay.style.display = 'none';
-  });
-
+  // رسم اللعبة
   function drawPaddle() {
-    ctx.fillStyle = '#fff';
-    ctx.shadowColor = 'white';
-    ctx.shadowBlur = 15;
+    ctx.fillStyle = ballColor;
     ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
   }
 
@@ -346,119 +329,139 @@
     ctx.beginPath();
     ctx.fillStyle = ballColor;
     ctx.shadowColor = ballColor;
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = 15;
     ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.closePath();
+    ctx.shadowBlur = 0;
   }
 
-  function movePaddle() {
+  // تحديث موقع اللعبة
+  function update() {
+    if (isGameOver) return;
+
+    ball.x += ball.speedX;
+    ball.y += ball.speedY;
+
+    // ارتداد الكرة عن الحواف
+    if (ball.x + ball.radius > canvas.width || ball.x - ball.radius < 0) {
+      ball.speedX = -ball.speedX;
+    }
+    if (ball.y - ball.radius < 0) {
+      ball.speedY = -ball.speedY;
+      score++;
+      scoreDisplay.textContent = `النقاط: ${score}`;
+    }
+
+    // تصادم مع المضرب
+    if (
+      ball.y + ball.radius >= paddle.y &&
+      ball.x + ball.radius >= paddle.x &&
+      ball.x - ball.radius <= paddle.x + paddle.width
+    ) {
+      ball.speedY = -ball.speedY;
+    }
+
+    // الكرة تسقط تحت المضرب = خسارة
+    if (ball.y - ball.radius > canvas.height) {
+      gameOver();
+    }
+
+    // تحديث موقع المضرب
     paddle.x += paddle.dx;
+
+    // حدود المضرب داخل الشاشة
     if (paddle.x < 0) paddle.x = 0;
     if (paddle.x + paddle.width > canvas.width) paddle.x = canvas.width - paddle.width;
   }
 
-  function moveBall() {
-    ball.x += ball.speedX;
-    ball.y += ball.speedY;
-
-    if (ball.x + ball.radius > canvas.width || ball.x - ball.radius < 0) {
-      ball.speedX = -ball.speedX;
-    }
-
-    if (ball.y - ball.radius < 0) {
-      ball.speedY = -ball.speedY;
-    }
-
-    if (
-      ball.y + ball.radius > paddle.y &&
-      ball.x > paddle.x &&
-      ball.x < paddle.x + paddle.width
-    ) {
-      ball.speedY = -ball.speedY;
-      ball.speedX *= 1.05;
-      ball.speedY *= 1.05;
-
-      score++;
-      scoreDisplay.textContent = `Score: ${score}`;
-    }
-
-    if (ball.y - ball.radius > canvas.height) {
-      endGame();
-    }
-  }
-
-  function endGame() {
-    isGameOver = true;
-    cancelAnimationFrame(animationFrameId);
-    scoreDisplay.style.display = 'none';
-    gameOverOverlay.classList.add('show');
-
-    // حفظ النتيجة الحالية في قائمة أفضل اللاعبين
-    if(currentPlayerName.trim() !== '') {
-      const players = getBestPlayers();
-      players.push({ name: currentPlayerName, score });
-      saveBestPlayers(players);
-      updateBestPlayersList();
-    }
-  }
-
-  function gameLoop() {
+  // رسم الإطار
+  function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawPaddle();
     drawBall();
-    movePaddle();
-    moveBall();
+  }
 
+  function gameLoop() {
+    update();
+    draw();
     if (!isGameOver) {
       animationFrameId = requestAnimationFrame(gameLoop);
     }
   }
 
-  // تحكم بعصا اللعب (paddle) عن طريق اللمس على الجوال
-  canvas.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-    const touch = e.touches[0];
-    let touchX = touch.clientX;
-    paddle.x = touchX - paddle.width / 2;
+  function gameOver() {
+    isGameOver = true;
+    cancelAnimationFrame(animationFrameId);
+    gameOverOverlay.classList.add('show');
+    addPlayerScore(currentPlayerName, score);
+    bestPlayersContainer.style.display = 'block'; // أظهر أفضل اللاعبين بعد الخسارة
+    scoreDisplay.style.display = 'none';
+  }
+
+  // تحكم اللاعب بالمضرب عن طريق الماوس أو اللمس
+  function onMouseMove(e) {
+    const rect = canvas.getBoundingClientRect();
+    paddle.x = e.clientX - rect.left - paddle.width / 2;
     if (paddle.x < 0) paddle.x = 0;
     if (paddle.x + paddle.width > canvas.width) paddle.x = canvas.width - paddle.width;
-  }, { passive: false });
+  }
 
-  // تحكم بالعصا بالكيبورد (يسار ويمين)
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowRight') {
-      paddle.dx = paddle.speed;
-    } else if (e.key === 'ArrowLeft') {
-      paddle.dx = -paddle.speed;
+  function onTouchMove(e) {
+    const rect = canvas.getBoundingClientRect();
+    if (e.touches.length > 0) {
+      paddle.x = e.touches[0].clientX - rect.left - paddle.width / 2;
+      if (paddle.x < 0) paddle.x = 0;
+      if (paddle.x + paddle.width > canvas.width) paddle.x = canvas.width - paddle.width;
     }
+  }
+
+  // حفظ لون الكرة في localStorage
+  function saveBallColor(color) {
+    localStorage.setItem('ballColor', color);
+  }
+
+  // تحميل لون الكرة من localStorage
+  function loadBallColor() {
+    const saved = localStorage.getItem('ballColor');
+    if (saved) {
+      ballColor = saved;
+    }
+  }
+
+  // تفعيل ألوان تغيير الكرة
+  colorBtn.addEventListener('click', () => {
+    colorMenu.style.display = colorMenu.style.display === 'grid' ? 'none' : 'grid';
   });
 
-  document.addEventListener('keyup', (e) => {
-    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-      paddle.dx = 0;
-    }
+  colorOptions.forEach(button => {
+    button.addEventListener('click', () => {
+      ballColor = button.getAttribute('data-color');
+      saveBallColor(ballColor);
+      colorMenu.style.display = 'none';
+    });
   });
 
-  // زر بداية اللعبة
+  // عند الضغط على زر ابدأ
   startBtn.addEventListener('click', () => {
-    const playerName = playerNameInput.value.trim();
-    if(playerName === '') {
+    const name = playerNameInput.value.trim();
+    if (!name) {
       errorMsg.style.visibility = 'visible';
       return;
     }
     errorMsg.style.visibility = 'hidden';
 
-    currentPlayerName = playerName;
-    localStorage.setItem('currentPlayerName', playerName);
+    currentPlayerName = name;
+    localStorage.setItem('currentPlayerName', currentPlayerName);
 
     startScreen.style.display = 'none';
     bestPlayersContainer.style.display = 'none';
     scoreDisplay.style.display = 'block';
 
     score = 0;
-    isGameOver = false;
+    scoreDisplay.textContent = `النقاط: ${score}`;
 
+    // اعادة موقع الكرة والمضرب
     ball.x = canvas.width / 2;
     ball.y = canvas.height / 3;
     ball.speedX = 6;
@@ -466,41 +469,27 @@
 
     paddle.x = canvas.width / 2 - paddle.width / 2;
 
+    isGameOver = false;
     gameLoop();
-  });
-
-  // زر إظهار قائمة ألوان الكرة
-  colorBtn.addEventListener('click', () => {
-    colorMenu.style.display = colorMenu.style.display === 'grid' ? 'none' : 'grid';
-  });
-
-  // اختيار لون الكرة
-  colorOptions.forEach(button => {
-    button.addEventListener('click', () => {
-      ballColor = button.getAttribute('data-color');
-      localStorage.setItem('ballColor', ballColor);
-      colorMenu.style.display = 'none';
-    });
   });
 
   // زر إعادة اللعب
   retryBtn.addEventListener('click', () => {
     gameOverOverlay.classList.remove('show');
     score = 0;
-    isGameOver = false;
-
+    scoreDisplay.textContent = `النقاط: ${score}`;
     ball.x = canvas.width / 2;
     ball.y = canvas.height / 3;
     ball.speedX = 6;
     ball.speedY = 6;
-
     paddle.x = canvas.width / 2 - paddle.width / 2;
-
+    isGameOver = false;
+    bestPlayersContainer.style.display = 'none';
     scoreDisplay.style.display = 'block';
     gameLoop();
   });
 
-  // زر العودة إلى القائمة الرئيسية
+  // زر العودة للقائمة الرئيسية
   backToMenuBtn.addEventListener('click', () => {
     gameOverOverlay.classList.remove('show');
     startScreen.style.display = 'flex';
@@ -508,12 +497,32 @@
     scoreDisplay.style.display = 'none';
   });
 
-  // إعادة ضبط حجم الكانفس عند تغيير حجم النافذة
+  // تحميل البيانات المحفوظة عند التحميل
+  window.addEventListener('load', () => {
+    loadBallColor();
+    const savedName = localStorage.getItem('currentPlayerName');
+    if (savedName) {
+      playerNameInput.value = savedName;
+      currentPlayerName = savedName;
+    }
+    updateBestPlayersList();
+    startScreen.style.display = 'flex';
+    bestPlayersContainer.style.display = 'block';
+    scoreDisplay.style.display = 'none';
+  });
+
+  // التحكم بالمضرب مع الماوس واللمس
+  canvas.addEventListener('mousemove', onMouseMove);
+  canvas.addEventListener('touchmove', onTouchMove, { passive: true });
+
+  // ضبط مقاس الكانفس مع تغيير حجم الشاشة
   window.addEventListener('resize', () => {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    paddle.x = canvas.width / 2 - paddle.width / 2;
+    paddle.y = canvas.height - 40;
+    paddle.x = Math.min(paddle.x, canvas.width - paddle.width);
   });
 </script>
+
 </body>
 </html>
