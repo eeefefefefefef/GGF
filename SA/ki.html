@@ -29,6 +29,26 @@
     font-weight: bold;
     text-shadow: 0 0 10px white;
   }
+  #bestPlayers {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(255 255 255 / 0.1);
+    padding: 10px 15px;
+    border-radius: 10px;
+    font-size: 1rem;
+    max-width: 250px;
+    line-height: 1.4;
+    user-select: text;
+  }
+  #bestPlayers h3 {
+    margin: 0 0 8px 0;
+    font-weight: bold;
+    font-size: 1.3rem;
+    text-align: center;
+    color: #FFD700;
+    text-shadow: 0 0 5px #FFD700;
+  }
   #gameOverOverlay {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
@@ -100,6 +120,22 @@
     background: transparent;
     border-radius: 10px;
   }
+  #playerNameInput {
+    width: 230px;
+    padding: 0.8rem 1rem;
+    font-size: 1.3rem;
+    border-radius: 10px;
+    border: none;
+    outline: none;
+  }
+  #errorMsg {
+    color: #ff5555;
+    font-weight: bold;
+    margin: 0;
+    height: 1.3rem;
+    text-align: center;
+    visibility: hidden;
+  }
   #startBtn, #colorBtn {
     padding: 1rem 2rem;
     font-size: 1.5rem;
@@ -146,6 +182,8 @@
 <div id="startScreen">
   <div id="startContent">
     <h1>حياك الله</h1>
+    <input id="playerNameInput" type="text" placeholder="اكتب اسمك هنا" autocomplete="off" />
+    <p id="errorMsg">لازم تحط اسم عشان تلعب</p>
     <button id="startBtn">ابدأ اللعبة</button>
     <button id="colorBtn">تغيير اللون</button>
     <div id="colorMenu">
@@ -166,6 +204,11 @@
 </div>
 
 <div id="score">Score: 0</div>
+<div id="bestPlayers">
+  <h3>أفضل 5 لاعبين</h3>
+  <ol id="bestPlayersList" style="padding-inline-start: 18px; margin:0;"></ol>
+</div>
+
 <canvas id="gameCanvas"></canvas>
 
 <div id="gameOverOverlay">
@@ -183,6 +226,9 @@
   const colorBtn = document.getElementById('colorBtn');
   const colorMenu = document.getElementById('colorMenu');
   const colorOptions = document.querySelectorAll('.colorOption');
+  const playerNameInput = document.getElementById('playerNameInput');
+  const errorMsg = document.getElementById('errorMsg');
+  const bestPlayersList = document.getElementById('bestPlayersList');
 
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -213,8 +259,53 @@
   let isGameOver = false;
   let score = 0;
   let animationFrameId;
+  let currentPlayerName = '';
 
-  colorMenu.style.display = 'none';
+  // جلب وتخزين أفضل اللاعبين في localStorage
+  function getBestPlayers() {
+    const data = localStorage.getItem('bestPlayers');
+    if (!data) return [];
+    try {
+      return JSON.parse(data);
+    } catch {
+      return [];
+    }
+  }
+
+  function saveBestPlayers(players) {
+    localStorage.setItem('bestPlayers', JSON.stringify(players));
+  }
+
+  // تحديث قائمة أفضل اللاعبين في الشاشة
+  function updateBestPlayersList() {
+    const players = getBestPlayers();
+    players.sort((a,b) => b.score - a.score);
+    const top5 = players.slice(0,5);
+
+    bestPlayersList.innerHTML = '';
+    if(top5.length === 0){
+      bestPlayersList.innerHTML = '<li>لا يوجد لاعبين بعد</li>';
+      return;
+    }
+
+    top5.forEach(player => {
+      const li = document.createElement('li');
+      li.textContent = `${player.name} — ${player.score} نقطة`;
+      bestPlayersList.appendChild(li);
+    });
+  }
+
+  // تحديث أفضل اللاعبين عند تحميل الصفحة
+  updateBestPlayersList();
+
+  // عند تحميل الصفحة، نعبي خانة الاسم إذا موجود محفوظ
+  window.addEventListener('load', () => {
+    const savedName = localStorage.getItem('currentPlayerName');
+    if(savedName) {
+      playerNameInput.value = savedName;
+      currentPlayerName = savedName;
+    }
+  });
 
   function drawPaddle() {
     ctx.fillStyle = '#fff';
@@ -313,42 +404,85 @@
 
   function endGame() {
     isGameOver = true;
+    cancelAnimationFrame(animationFrameId);
     gameOverOverlay.classList.add('show');
+
+    // حفظ اللاعب في أفضل اللاعبين إذا حقق نتيجة عالية
+    if(currentPlayerName.trim() !== '') {
+      let players = getBestPlayers();
+      players.push({name: currentPlayerName.trim(), score: score});
+      players.sort((a,b) => b.score - a.score);
+      // خزن فقط أفضل 10 لاعبين لتوفير مساحة
+      players = players.slice(0, 10);
+      saveBestPlayers(players);
+      updateBestPlayersList();
+    }
   }
 
-  retryBtn.addEventListener('click', resetGame);
+  // زر إعادة اللعب
+  retryBtn.addEventListener('click', () => {
+    resetGame();
+  });
 
+  // زر العودة للقائمة الرئيسية - لا يمسح اسم اللاعب
   backToMenuBtn.addEventListener('click', () => {
-    isGameOver = true;
-    cancelAnimationFrame(animationFrameId);
     gameOverOverlay.classList.remove('show');
     startScreen.style.display = 'flex';
-    score = 0;
-    scoreDisplay.textContent = `Score: ${score}`;
-    ball.x = canvas.width / 2;
-    ball.y = canvas.height / 3;
-    ball.speedX = 6;
-    ball.speedY = 6;
-    paddle.x = canvas.width / 2 - paddle.width / 2;
   });
 
-  canvas.addEventListener('mousemove', mouseMoveHandler);
-  canvas.addEventListener('touchmove', touchMoveHandler, { passive: false });
+  // بدء اللعبة بعد التحقق من اسم اللاعب
+  startBtn.addEventListener('click', () => {
+    const name = playerNameInput.value.trim();
+    if (name === '') {
+      errorMsg.style.visibility = 'visible';
+      return;
+    }
+    errorMsg.style.visibility = 'hidden';
+    currentPlayerName = name;
+    localStorage.setItem('currentPlayerName', currentPlayerName);
+    startScreen.style.display = 'none';
+    resetGame();
+  });
 
+  // إظهار أو إخفاء قائمة الألوان
   colorBtn.addEventListener('click', () => {
-    colorMenu.style.display = colorMenu.style.display === 'none' ? 'grid' : 'none';
+    if (colorMenu.style.display === 'grid') {
+      colorMenu.style.display = 'none';
+    } else {
+      colorMenu.style.display = 'grid';
+    }
   });
 
-  colorOptions.forEach(button => {
-    button.addEventListener('click', () => {
-      ballColor = button.dataset.color;
-      colorMenu.style.display = 'none';
+  // اختيار لون الكرة
+  colorOptions.forEach(btn => {
+    btn.addEventListener('click', () => {
+      ballColor = btn.getAttribute('data-color');
+      localStorage.setItem('ballColor', ballColor);
     });
   });
 
-  startBtn.addEventListener('click', () => {
-    resetGame();
-    startScreen.style.display = 'none';
+  // تحميل لون الكرة من التخزين المحلي لو موجود
+  window.addEventListener('load', () => {
+    const savedColor = localStorage.getItem('ballColor');
+    if(savedColor) {
+      ballColor = savedColor;
+    }
+  });
+
+  // تحكم بالماوس
+  canvas.addEventListener('mousemove', mouseMoveHandler);
+
+  // تحكم باللمس
+  canvas.addEventListener('touchmove', touchMoveHandler, { passive: false });
+
+  // تحديث حجم الكانفاس عند تغيير حجم النافذة
+  window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    paddle.y = canvas.height - 40;
+    if (!isGameOver && !startScreen.style.display) {
+      draw();
+    }
   });
 </script>
 
