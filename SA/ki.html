@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>لعبة الكورة والعامود</title>
+<style>
+  body {
+    margin: 0;
+    background-color: #000;
+    overflow: hidden;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: white;
+    user-select: none;
+  }
+  canvas {
+    display: block;
+    margin: 0 auto;
+    background-color: #000;
+    touch-action: none;
+  }
+  #score {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 2rem;
+    color: white;
+    font-weight: bold;
+    text-shadow: 0 0 10px white;
+  }
+  #gameOverOverlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+  }
+  #gameOverOverlay.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  #gameOverOverlay h1 {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    font-weight: 700;
+  }
+  #retryBtn, #backToMenuBtn {
+    padding: 1rem 2rem;
+    font-size: 1.5rem;
+    background: white;
+    color: black;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+    width: 240px;
+    margin-top: 1rem;
+  }
+  #retryBtn:hover, #backToMenuBtn:hover {
+    background: #ccc;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  #startScreen {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #000;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    z-index: 10;
+    opacity: 0;
+    animation: fadeIn 1s forwards;
+  }
+  #startContent {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+  #startContent h1 {
+    font-size: 3rem;
+    margin: 0;
+    padding: 1rem 2rem;
+    font-weight: bold;
+    text-align: center;
+    text-shadow: 0 0 10px white;
+    width: 240px;
+    color: white;
+    background: transparent;
+    border-radius: 10px;
+  }
+  #startBtn, #colorBtn {
+    padding: 1rem 2rem;
+    font-size: 1.5rem;
+    background: white;
+    color: black;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+    width: 240px;
+  }
+  #startBtn:hover, #colorBtn:hover {
+    background: #ccc;
+  }
+  #colorMenu {
+    display: none;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    width: 260px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+  }
+  #colorMenu .colorOption {
+    padding: 0.5rem 1rem;
+    margin: 0.2rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+    color: white;
+    box-shadow: 0 0 8px rgba(0,0,0,0.5);
+    transition: transform 0.2s ease;
+  }
+  #colorMenu .colorOption:hover {
+    transform: scale(1.1);
+  }
+</style>
+</head>
+<body>
+
+<!-- شاشة البداية -->
+<div id="startScreen">
+  <div id="startContent">
+    <h1>حياك الله</h1>
+    <button id="startBtn">ابدأ اللعبة</button>
+    <button id="colorBtn">تغيير اللون</button>
+    <div id="colorMenu">
+      <button class="colorOption" data-color="red" style="background: red;">أحمر</button>
+      <button class="colorOption" data-color="blue" style="background: blue;">أزرق</button>
+      <button class="colorOption" data-color="green" style="background: green;">أخضر</button>
+      <button class="colorOption" data-color="#FF4500" style="background: #FF4500;">برتقالي</button>
+      <button class="colorOption" data-color="#8A2BE2" style="background: #8A2BE2;">أرجواني</button>
+      <button class="colorOption" data-color="#00CED1" style="background: #00CED1;">تركواز</button>
+      <button class="colorOption" data-color="#FF1493" style="background: #FF1493;">زهري</button>
+      <button class="colorOption" data-color="#7FFF00" style="background: #7FFF00; color: black;">ليموني</button>
+      <button class="colorOption" data-color="#1E90FF" style="background: #1E90FF;">أزرق سماوي</button>
+      <button class="colorOption" data-color="#FF6347" style="background: #FF6347;">طماطمي</button>
+      <button class="colorOption" data-color="#2E8B57" style="background: #2E8B57;">أخضر غامق</button>
+      <button class="colorOption" data-color="#FFD700" style="background: #FFD700; color: black;">ذهبي</button>
+    </div>
+  </div>
+</div>
+
+<div id="score">Score: 0</div>
+<canvas id="gameCanvas"></canvas>
+
+<div id="gameOverOverlay">
+  <h1>لقد خسرت حاول مرا اخرى</h1>
+  <button id="retryBtn">إعادة اللعب</button>
+  <button id="backToMenuBtn">القائمة الرئيسية</button>
+</div>
+
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const scoreDisplay = document.getElementById('score');
+  const startScreen = document.getElementById('startScreen');
+  const startBtn = document.getElementById('startBtn');
+  const colorBtn = document.getElementById('colorBtn');
+  const colorMenu = document.getElementById('colorMenu');
+  const colorOptions = document.querySelectorAll('.colorOption');
+
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  let ballColor = '#fff';
+
+  const paddle = {
+    width: 120,
+    height: 15,
+    x: canvas.width / 2 - 60,
+    y: canvas.height - 40,
+    speed: 12,
+    dx: 0
+  };
+
+  const ball = {
+    x: canvas.width / 2,
+    y: canvas.height / 3,
+    radius: 12,
+    speedX: 6,
+    speedY: 6
+  };
+
+  const gameOverOverlay = document.getElementById('gameOverOverlay');
+  const retryBtn = document.getElementById('retryBtn');
+  const backToMenuBtn = document.getElementById('backToMenuBtn');
+
+  let isGameOver = false;
+  let score = 0;
+  let animationFrameId;
+
+  colorMenu.style.display = 'none';
+
+  function drawPaddle() {
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = 'white';
+    ctx.shadowBlur = 15;
+    ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
+  }
+
+  function drawBall() {
+    ctx.beginPath();
+    ctx.fillStyle = ballColor;
+    ctx.shadowColor = ballColor;
+    ctx.shadowBlur = 20;
+    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.closePath();
+  }
+
+  function movePaddle() {
+    paddle.x += paddle.dx;
+    if (paddle.x < 0) paddle.x = 0;
+    if (paddle.x + paddle.width > canvas.width) paddle.x = canvas.width - paddle.width;
+  }
+
+  function moveBall() {
+    ball.x += ball.speedX;
+    ball.y += ball.speedY;
+
+    if (ball.x + ball.radius > canvas.width || ball.x - ball.radius < 0) {
+      ball.speedX = -ball.speedX;
+    }
+
+    if (ball.y - ball.radius < 0) {
+      ball.speedY = -ball.speedY;
+    }
+
+    if (
+      ball.y + ball.radius > paddle.y &&
+      ball.x > paddle.x &&
+      ball.x < paddle.x + paddle.width
+    ) {
+      ball.speedY = -ball.speedY;
+      ball.speedX *= 1.05;
+      ball.speedY *= 1.05;
+
+      score++;
+      scoreDisplay.textContent = `Score: ${score}`;
+    }
+
+    if (ball.y - ball.radius > canvas.height) {
+      endGame();
+    }
+  }
+
+  function clear() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function draw() {
+    clear();
+    drawPaddle();
+    drawBall();
+  }
+
+  function update() {
+    if (isGameOver) return;
+    movePaddle();
+    moveBall();
+    draw();
+    animationFrameId = requestAnimationFrame(update);
+  }
+
+  function mouseMoveHandler(e) {
+    const rect = canvas.getBoundingClientRect();
+    paddle.x = e.clientX - rect.left - paddle.width / 2;
+  }
+
+  function touchMoveHandler(e) {
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    paddle.x = touch.clientX - rect.left - paddle.width / 2;
+  }
+
+  function resetGame() {
+    isGameOver = false;
+    score = 0;
+    scoreDisplay.textContent = `Score: ${score}`;
+    ball.x = canvas.width / 2;
+    ball.y = canvas.height / 3;
+    ball.speedX = 6;
+    ball.speedY = 6;
+    paddle.x = canvas.width / 2 - paddle.width / 2;
+    gameOverOverlay.classList.remove('show');
+    update();
+  }
+
+  function endGame() {
+    isGameOver = true;
+    gameOverOverlay.classList.add('show');
+  }
+
+  retryBtn.addEventListener('click', resetGame);
+
+  backToMenuBtn.addEventListener('click', () => {
+    isGameOver = true;
+    cancelAnimationFrame(animationFrameId);
+    gameOverOverlay.classList.remove('show');
+    startScreen.style.display = 'flex';
+    score = 0;
+    scoreDisplay.textContent = `Score: ${score}`;
+    ball.x = canvas.width / 2;
+    ball.y = canvas.height / 3;
+    ball.speedX = 6;
+    ball.speedY = 6;
+    paddle.x = canvas.width / 2 - paddle.width / 2;
+  });
+
+  canvas.addEventListener('mousemove', mouseMoveHandler);
+  canvas.addEventListener('touchmove', touchMoveHandler, { passive: false });
+
+  colorBtn.addEventListener('click', () => {
+    colorMenu.style.display = colorMenu.style.display === 'none' ? 'grid' : 'none';
+  });
+
+  colorOptions.forEach(button => {
+    button.addEventListener('click', () => {
+      ballColor = button.dataset.color;
+      colorMenu.style.display = 'none';
+    });
+  });
+
+  startBtn.addEventListener('click', () => {
+    resetGame();
+    startScreen.style.display = 'none';
+  });
+</script>
+
+</body>
+</html>
