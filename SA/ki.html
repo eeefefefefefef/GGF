@@ -201,13 +201,13 @@
       <button class="colorOption" data-color="#FFD700" style="background: #FFD700; color: black;">ذهبي</button>
     </div>
   </div>
+  <div id="bestPlayers">
+    <h3>أفضل 5 لاعبين</h3>
+    <ol id="bestPlayersList" style="padding-inline-start: 18px; margin:0;"></ol>
+  </div>
 </div>
 
 <div id="score">Score: 0</div>
-<div id="bestPlayers">
-  <h3>أفضل 5 لاعبين</h3>
-  <ol id="bestPlayersList" style="padding-inline-start: 18px; margin:0;"></ol>
-</div>
 
 <canvas id="gameCanvas"></canvas>
 
@@ -229,6 +229,10 @@
   const playerNameInput = document.getElementById('playerNameInput');
   const errorMsg = document.getElementById('errorMsg');
   const bestPlayersList = document.getElementById('bestPlayersList');
+  const bestPlayersContainer = document.getElementById('bestPlayers');
+  const gameOverOverlay = document.getElementById('gameOverOverlay');
+  const retryBtn = document.getElementById('retryBtn');
+  const backToMenuBtn = document.getElementById('backToMenuBtn');
 
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -251,10 +255,6 @@
     speedX: 6,
     speedY: 6
   };
-
-  const gameOverOverlay = document.getElementById('gameOverOverlay');
-  const retryBtn = document.getElementById('retryBtn');
-  const backToMenuBtn = document.getElementById('backToMenuBtn');
 
   let isGameOver = false;
   let score = 0;
@@ -295,16 +295,27 @@
     });
   }
 
-  // تحديث أفضل اللاعبين عند تحميل الصفحة
-  updateBestPlayersList();
-
-  // عند تحميل الصفحة، نعبي خانة الاسم إذا موجود محفوظ
+  // عند تحميل الصفحة، نعبي خانة الاسم، لون الكرة، ونخفي قائمة الألوان
   window.addEventListener('load', () => {
+    colorMenu.style.display = 'none';  // إخفاء قائمة الألوان أول ما تحمل الصفحة
+
     const savedName = localStorage.getItem('currentPlayerName');
     if(savedName) {
       playerNameInput.value = savedName;
       currentPlayerName = savedName;
     }
+
+    const savedColor = localStorage.getItem('ballColor');
+    if(savedColor) {
+      ballColor = savedColor;
+    }
+
+    updateBestPlayersList();
+
+    // نعرض شاشة البداية مع قائمة أفضل اللاعبين
+    startScreen.style.display = 'flex';
+    bestPlayersContainer.style.display = 'block';
+    scoreDisplay.style.display = 'none';
   });
 
   function drawPaddle() {
@@ -424,66 +435,61 @@
     resetGame();
   });
 
-  // زر العودة للقائمة الرئيسية - لا يمسح اسم اللاعب
+  // زر العودة للقائمة الرئيسية - يظهر شاشة البداية وقائمة أفضل اللاعبين ويخفي النتيجة
   backToMenuBtn.addEventListener('click', () => {
     gameOverOverlay.classList.remove('show');
     startScreen.style.display = 'flex';
+    bestPlayersContainer.style.display = 'block';
+    scoreDisplay.style.display = 'none';
   });
 
-  // بدء اللعبة بعد التحقق من اسم اللاعب
+  // بدء اللعبة بعد التحقق من اسم اللاعب، يخفي شاشة البداية وقائمة أفضل اللاعبين ويظهر النتيجة
   startBtn.addEventListener('click', () => {
     const name = playerNameInput.value.trim();
-    if (name === '') {
+    if(name === '') {
       errorMsg.style.visibility = 'visible';
       return;
     }
     errorMsg.style.visibility = 'hidden';
     currentPlayerName = name;
-    localStorage.setItem('currentPlayerName', currentPlayerName);
+    localStorage.setItem('currentPlayerName', name);
+    localStorage.setItem('ballColor', ballColor);
     startScreen.style.display = 'none';
+    bestPlayersContainer.style.display = 'none';
+    scoreDisplay.style.display = 'block';
+
     resetGame();
+
+    // أضف مستمعي حركة الماوس واللمس عند بدء اللعبة فقط
+    canvas.addEventListener('mousemove', mouseMoveHandler);
+    canvas.addEventListener('touchmove', touchMoveHandler, { passive: false });
   });
 
-  // إظهار أو إخفاء قائمة الألوان
+  // زر تغيير اللون يظهر أو يخفي قائمة الألوان
   colorBtn.addEventListener('click', () => {
-    if (colorMenu.style.display === 'grid') {
-      colorMenu.style.display = 'none';
-    } else {
+    if(colorMenu.style.display === 'none') {
       colorMenu.style.display = 'grid';
+    } else {
+      colorMenu.style.display = 'none';
     }
   });
 
-  // اختيار لون الكرة
-  colorOptions.forEach(btn => {
-    btn.addEventListener('click', () => {
-      ballColor = btn.getAttribute('data-color');
+  // اختيار لون جديد للكرة
+  colorOptions.forEach(button => {
+    button.addEventListener('click', () => {
+      ballColor = button.dataset.color;
       localStorage.setItem('ballColor', ballColor);
+      colorMenu.style.display = 'none';
     });
   });
 
-  // تحميل لون الكرة من التخزين المحلي لو موجود
-  window.addEventListener('load', () => {
-    const savedColor = localStorage.getItem('ballColor');
-    if(savedColor) {
-      ballColor = savedColor;
-    }
-  });
-
-  // تحكم بالماوس
-  canvas.addEventListener('mousemove', mouseMoveHandler);
-
-  // تحكم باللمس
-  canvas.addEventListener('touchmove', touchMoveHandler, { passive: false });
-
-  // تحديث حجم الكانفاس عند تغيير حجم النافذة
+  // تحديث حجم الكانفاس عند تغيير حجم الشاشة
   window.addEventListener('resize', () => {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     paddle.y = canvas.height - 40;
-    if (!isGameOver && !startScreen.style.display) {
-      draw();
-    }
   });
+
 </script>
 
 </body>
